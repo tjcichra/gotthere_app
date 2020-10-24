@@ -25,6 +25,9 @@
             "request": "launch",
             "name": "App Build & Launch",
             "preLaunchTask": "run gradle",
+            "apkFile": "${workspaceRoot}/app/build/outputs/apk/debug/app-debug.apk",
+            "adbPort": 5037,
+            "appSrcRoot": "${workspaceRoot}/app/src/main"
         }
     ],
 }
