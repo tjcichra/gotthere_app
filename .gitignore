@@ -88,3 +88,8 @@ lint/tmp/
 *.hprof
 
 .DS_Store
+app/.settings/org.eclipse.buildship.core.prefs
+app/.project
+app/.classpath
+.settings/org.eclipse.buildship.core.prefs
+.project
