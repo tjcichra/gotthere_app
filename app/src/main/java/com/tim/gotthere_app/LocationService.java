@@ -37,6 +37,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 
 public class LocationService extends Service {
 
@@ -64,6 +66,8 @@ public class LocationService extends Service {
 	private NotificationManager mNotificationManager;
 
 	private Socket socket;
+
+	private BlockingQueue<Location> locationQueue = new ArrayBlockingQueue<>(512);
 
 	public class LocalBinder extends Binder {
 		LocationService getService() {
@@ -186,8 +190,26 @@ public class LocationService extends Service {
 		super.onCreate();
 		Log.d(TAG, "onCreate");
 
-		Thread t = new Thread(this::connectSocket);
-		t.start();
+		Thread socketConnection = new Thread(() -> {
+			boolean connected = false;
+
+			while(!connected) {
+				try {
+					this.socket = new Socket("10.0.0.224", 2810);
+					connected = true;
+				} catch (Exception e) {
+					Log.d(TAG, e.getMessage());
+				}
+			}
+
+			Log.d(TAG, "Connected");
+		});
+
+		socketConnection.start();
+
+		new Thread(this::datathingy).start();
+
+		Log.d(TAG, "Ready");
 
 		this.mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
@@ -215,55 +237,52 @@ public class LocationService extends Service {
 		}
 	}
 
-	public void connectSocket() {
-		boolean connect = false;
-
-		while(!connect) {
-			try {
-				this.socket = new Socket("10.0.0.224", 2810);
-				connect = true;
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-	}
-
-	public void setFusedLocationProvider() {
-
-	}
-
 	private void onNewLocation(Location location) {
 		Log.i(TAG, "New location: " + location);
 
 		mLocation = location;
 
-		byte[] buffer = new byte[10];
-		this.insertDoubleTwo(buffer, 0, location.getBearing());
-		this.insertDoubleOne(buffer, 3, location.getLatitude());
-		this.insertDoubleTwo(buffer, 5, location.getLongitude());
-		this.insertDoubleOne(buffer, 8, location.getSpeed());
+		try {
+			this.locationQueue.put(location);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
 
-		Thread t = new Thread(() -> {
-			if(this.socket != null) {
+	public void datathingy() {
+		while(true) {
+			if(this.socket != null && !this.socket.isClosed()) {
 				try {
-					OutputStream out = this.socket.getOutputStream();
-					out.write(buffer);
-				} catch (IOException e) {
+					Location location = this.locationQueue.take();
+
+					byte[] buffer = new byte[10];
+					this.insertDoubleTwo(buffer, 0, location.getBearing());
+					this.insertDoubleOne(buffer, 3, location.getLatitude());
+					this.insertDoubleTwo(buffer, 5, location.getLongitude());
+					this.insertDoubleOne(buffer, 8, location.getSpeed());
+
+					if (this.socket != null) {
+						try {
+							OutputStream out = this.socket.getOutputStream();
+							out.write(buffer);
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
+					}
+
+					// Notify anyone listening for broadcasts about the new location.
+					Intent intent = new Intent(ACTION_BROADCAST);
+					intent.putExtra(EXTRA_LOCATION, location);
+					//LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
+
+					// Update notification content if running as a foreground service.
+					if (this.serviceIsRunningInForeground(this)) {
+						mNotificationManager.notify(NOTIFICATION_ID, getNotification());
+					}
+				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
 			}
-		});
-
-		t.start();
-
-		// Notify anyone listening for broadcasts about the new location.
-		Intent intent = new Intent(ACTION_BROADCAST);
-		intent.putExtra(EXTRA_LOCATION, location);
-		//LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
-
-		// Update notification content if running as a foreground service.
-		if (this.serviceIsRunningInForeground(this)) {
-			mNotificationManager.notify(NOTIFICATION_ID, getNotification());
 		}
 	}
 
@@ -314,22 +333,6 @@ public class LocationService extends Service {
 				.setPriority(Notification.PRIORITY_HIGH)
 				.setSmallIcon(R.mipmap.ic_launcher)
 				.setTicker(text)
-				.setWhen(System.currentTimeMillis());
-
-		// Set the Channel ID for Android O.
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-			builder.setChannelId(CHANNEL_ID); // Channel ID
-		}
-
-		return builder.build();
-	}
-
-	private Notification getConnectingNotification() {
-		NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-				.setContentText("Tanner is real")
-				.setOngoing(true)
-				.setPriority(Notification.PRIORITY_HIGH)
-				.setSmallIcon(R.mipmap.ic_launcher)
 				.setWhen(System.currentTimeMillis());
 
 		return builder.build();
