@@ -31,10 +31,7 @@ import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
-import java.io.BufferedOutputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.net.SocketException;
@@ -76,6 +73,50 @@ public class LocationService extends Service {
 		}
 	}
 
+	/**
+	 * Called when the service is first started. It only runs once.
+	 * Used to start the threads that provide connection and send out location data.
+	 */
+	@Override
+	public void onCreate() {
+		super.onCreate();
+		Log.d(TAG, "onCreate");
+
+		new Thread(this.socketConnection).start();
+
+		new Thread(this::datathingy).start();
+
+		Log.d(TAG, "Ready");
+
+		this.mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+
+		this.mLocationCallback = new LocationCallback() {
+			@Override
+			public void onLocationResult(LocationResult locationResult) {
+				super.onLocationResult(locationResult);
+				onNewLocation(locationResult.getLastLocation());
+				Log.d(TAG, "" + locationResult.getLastLocation().getLongitude());
+			}
+		};
+
+		this.createLocationRequest();
+		this.getLastLocation();
+
+		HandlerThread handlerThread = new HandlerThread(TAG);
+		handlerThread.start();
+		this.mServiceHandler = new Handler(handlerThread.getLooper());
+		this.mNotificationManager = (NotificationManager) this.getSystemService(NOTIFICATION_SERVICE);
+
+		if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			NotificationChannel mChannel = new NotificationChannel(CHANNEL_ID, getString(R.string.app_name), NotificationManager.IMPORTANCE_DEFAULT);
+
+			mNotificationManager.createNotificationChannel(mChannel);
+		}
+	}
+
+	/**
+	 * Called when the service is "promoted" to the foreground.
+	 */
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		Log.i(TAG, "Service started");
@@ -89,12 +130,10 @@ public class LocationService extends Service {
 		return START_NOT_STICKY;
 	}
 
-	@Override
-	public void onConfigurationChanged(Configuration newConfig) {
-		super.onConfigurationChanged(newConfig);
-		this.mChangingConfiguration = true;
-	}
-
+	/**
+	 * Called when the main activity binds to the services with bindService().
+	 * Stops this service on the foreground and returns an interface used to interact with the service.
+	 */
 	@Nullable
 	@Override
 	public IBinder onBind(Intent intent) {
@@ -128,6 +167,12 @@ public class LocationService extends Service {
 			this.startForeground(NOTIFICATION_ID, getNotification());
 		}
 		return true; // Ensures onRebind() is called when a client re-binds.
+	}
+
+	@Override
+	public void onConfigurationChanged(Configuration newConfig) {
+		super.onConfigurationChanged(newConfig);
+		this.mChangingConfiguration = true;
 	}
 
 	@Override
@@ -195,50 +240,16 @@ public class LocationService extends Service {
 				connected = true;
 			} catch (Exception e) {
 				Log.d(TAG, e.getMessage());
+				try {
+					Thread.sleep(10000);
+				} catch (InterruptedException ex) {
+					ex.printStackTrace();
+				}
 			}
 		}
 
 		Log.d(TAG, "Connected");
 	};
-
-
-
-	@Override
-	public void onCreate() {
-		super.onCreate();
-		Log.d(TAG, "onCreate");
-
-		new Thread(this.socketConnection).start();
-
-		new Thread(this::datathingy).start();
-
-		Log.d(TAG, "Ready");
-
-		this.mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-
-		this.mLocationCallback = new LocationCallback() {
-			@Override
-			public void onLocationResult(LocationResult locationResult) {
-				super.onLocationResult(locationResult);
-				onNewLocation(locationResult.getLastLocation());
-				Log.d(TAG, "" + locationResult.getLastLocation().getLongitude());
-			}
-		};
-
-		this.createLocationRequest();
-		this.getLastLocation();
-
-		HandlerThread handlerThread = new HandlerThread(TAG);
-		handlerThread.start();
-		this.mServiceHandler = new Handler(handlerThread.getLooper());
-		this.mNotificationManager = (NotificationManager) this.getSystemService(NOTIFICATION_SERVICE);
-
-		if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-			NotificationChannel mChannel = new NotificationChannel(CHANNEL_ID, getString(R.string.app_name), NotificationManager.IMPORTANCE_DEFAULT);
-
-			mNotificationManager.createNotificationChannel(mChannel);
-		}
-	}
 
 	private void onNewLocation(Location location) {
 		Log.i(TAG, "New location: " + location);
@@ -258,11 +269,11 @@ public class LocationService extends Service {
 				try {
 					Location location = this.locationQueue.take();
 
-					byte[] buffer = new byte[10];
-					this.insertDoubleTwo(buffer, 0, location.getBearing());
-					this.insertDoubleOne(buffer, 3, location.getLatitude());
-					this.insertDoubleTwo(buffer, 5, location.getLongitude());
-					this.insertDoubleOne(buffer, 8, location.getSpeed());
+					byte[] buffer = new byte[15];
+					this.insertDoubleThree(buffer, 0, location.getBearing());
+					this.insertDoubleFive(buffer, 3, location.getLatitude());
+					this.insertDoubleFive(buffer, 8, location.getLongitude());
+					this.insertDoubleTwo(buffer, 13, location.getSpeed());
 
 
 					try {
@@ -299,7 +310,7 @@ public class LocationService extends Service {
 		}
 	}
 
-	public void insertDoubleTwo(byte[] buffer, int start, double value) {
+	public void insertDoubleThree(byte[] buffer, int start, double value) {
 		int ivalue = (int) value;
 		if(ivalue > Byte.MAX_VALUE) {
 			buffer[start] = (byte) (ivalue - Byte.MAX_VALUE);
@@ -316,7 +327,29 @@ public class LocationService extends Service {
 		buffer[start + 2] = (byte) fvalue;
 	}
 
-	public void insertDoubleOne(byte[] buffer, int start, double value) {
+	public void insertDoubleFive(byte[] buffer, int start, double value) {
+		int ivalue = (int) value;
+		if(ivalue > Byte.MAX_VALUE) {
+			buffer[start] = (byte) (ivalue - Byte.MAX_VALUE);
+			buffer[start + 1] = Byte.MAX_VALUE;
+		} else if(ivalue < Byte.MIN_VALUE) {
+			buffer[start] = (byte) (ivalue - Byte.MIN_VALUE);
+			buffer[start + 1] = Byte.MIN_VALUE;
+		} else {
+			buffer[start] = 0;
+			buffer[start + 1] = (byte) value;
+		}
+
+		int fvalue = ((int) (Math.abs(value) * 100)) % 100;
+		int fvalue2 = ((int) (Math.abs(value) * 10000)) % 100;
+		int fvalue3 = ((int) (Math.abs(value) * 1000000)) % 100;
+
+		buffer[start + 2] = (byte) fvalue;
+		buffer[start + 3] = (byte) fvalue2;
+		buffer[start + 4] = (byte) fvalue3;
+	}
+
+	public void insertDoubleTwo(byte[] buffer, int start, double value) {
 		int ivalue = (int) value;
 		buffer[start] = (byte) value;
 

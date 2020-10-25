@@ -22,6 +22,9 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.preference.PreferenceFragmentCompat;
 
+/**
+ * The main activity for the app. This is what controls the app's interface and deployment of the location service.
+ */
 public class MainActivity extends AppCompatActivity implements SharedPreferences.OnSharedPreferenceChangeListener {
 
 	private static final String TAG = MainActivity.class.getSimpleName();
@@ -29,7 +32,10 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 
 
 	private MyReceiver myReceiver;
+
+	//The instance of the service when it is bound to the app.
 	private LocationService mService = null;
+	//True when the service is bound to the app, false otherwise.
 	private boolean mBound = false;
 
 	private class MyReceiver extends BroadcastReceiver {
@@ -47,17 +53,28 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 				"(" + location.getLatitude() + ", " + location.getLongitude() + ")";
 	}
 
-	// Monitors the state of the connection to the service.
+	/**
+	 * Manages when the service is connected and disconnected.
+	 */
 	private final ServiceConnection mServiceConnection = new ServiceConnection() {
 
+		/**
+		 * Called when connection to the service has been established.
+		 * It sets mService to the instance of the service and starts the location updates. It also sets mBound to true.
+		 */
 		@Override
 		public void onServiceConnected(ComponentName name, IBinder service) {
+			//
 			LocationService.LocalBinder binder = (LocationService.LocalBinder) service;
 			mService = binder.getService();
 			mService.requestLocationUpdates();
 			mBound = true;
 		}
 
+		/**
+		 * Called when connection to the service has been lost.
+		 * It sets mService to null but keeps the location updates running. It also sets mBound to false.
+		 */
 		@Override
 		public void onServiceDisconnected(ComponentName name) {
 			mService = null;
@@ -73,6 +90,10 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 		}
 	});
 
+	/**
+	 * Called right when the app is launched.
+	 * Used for setting content view and handling permissions.
+	 */
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -85,16 +106,24 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 		//}
 	}
 
+	/**
+	 * Called after onCreate() when the app is visible (completely opened).
+	 * Used for binding the location service to the app.
+	 */
 	@Override
 	protected void onStart() {
 		super.onStart();
-		PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(this);
+		//PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(this);
 
 		this.bindService(new Intent(this, LocationService.class), this.mServiceConnection, Context.BIND_AUTO_CREATE);
 
 		//LocalBroadcastManager.getInstance(this).registerReceiver(this.myReceiver, new IntentFilter(LocationService.ACTION_BROADCAST)); //Look at this
 	}
 
+	/**
+	 * Called when the app is no longer visible (not completely opened).
+	 * Used for unbinding the location service to the app (if it is bound).
+	 */
 	@Override
 	protected void onStop() {
 		//LocalBroadcastManager.getInstance(this).unregisterReceiver(this.myReceiver);
@@ -103,12 +132,17 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 			this.unbindService(mServiceConnection);
 			mBound = false;
 		}
-		PreferenceManager.getDefaultSharedPreferences(this).unregisterOnSharedPreferenceChangeListener(this);
+
+		//PreferenceManager.getDefaultSharedPreferences(this).unregisterOnSharedPreferenceChangeListener(this);
 		super.onStop();
 	}
 
+	/**
+	 * Called right before the app is destroyed.
+	 */
 	@Override
 	protected void onDestroy() {
+		this.stopService(new Intent(this, LocationService.class));
 		super.onDestroy();
 	}
 
