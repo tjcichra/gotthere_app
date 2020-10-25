@@ -20,6 +20,7 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.preference.PreferenceFragmentCompat;
 
 public class MainActivity extends AppCompatActivity implements SharedPreferences.OnSharedPreferenceChangeListener {
 
@@ -77,6 +78,7 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 		super.onCreate(savedInstanceState);
 		this.myReceiver = new MyReceiver();
 		this.setContentView(R.layout.activity_main);
+		//this.getSupportFragmentManager().beginTransaction().replace(R.id.settings_container, new MySettingsFragment()).commit();
 
 		//if(Util.requestingLocationUpdates(this)) {
 			this.handlePermissions();
@@ -105,6 +107,11 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 		super.onStop();
 	}
 
+	@Override
+	protected void onDestroy() {
+		super.onDestroy();
+	}
+
 	public void handlePermissions() {
 		if(Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
 			//TODO Check for Android 6.0 https://stackoverflow.com/questions/33407250/checkselfpermission-method-is-not-working-in-targetsdkversion-22
@@ -122,6 +129,13 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 		// Update the buttons state depending on whether location updates are being requested.
 		if (s.equals(Util.KEY_REQUESTING_LOCATION_UPDATES)) {
 			//setButtonsState(sharedPreferences.getBoolean(Utils.KEY_REQUESTING_LOCATION_UPDATES, false));
+		}
+	}
+
+	public class MySettingsFragment extends PreferenceFragmentCompat {
+		@Override
+		public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
+			this.setPreferencesFromResource(R.xml.preferences, rootKey);
 		}
 	}
 }

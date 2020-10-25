@@ -1,7 +1,8 @@
 package com.tim.gotthere_app;
 
 import android.content.Context;
-import android.preference.PreferenceManager;
+
+import androidx.preference.PreferenceManager;
 
 public class Util {
 

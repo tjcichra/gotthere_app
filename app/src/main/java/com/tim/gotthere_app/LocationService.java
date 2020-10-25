@@ -37,6 +37,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
@@ -185,27 +186,29 @@ public class LocationService extends Service {
 				.apply();
 	}
 
+	Runnable socketConnection = () -> {
+		boolean connected = false;
+
+		while(!connected) {
+			try {
+				this.socket = new Socket("10.0.0.224", 2810);
+				connected = true;
+			} catch (Exception e) {
+				Log.d(TAG, e.getMessage());
+			}
+		}
+
+		Log.d(TAG, "Connected");
+	};
+
+
+
 	@Override
 	public void onCreate() {
 		super.onCreate();
 		Log.d(TAG, "onCreate");
 
-		Thread socketConnection = new Thread(() -> {
-			boolean connected = false;
-
-			while(!connected) {
-				try {
-					this.socket = new Socket("10.0.0.224", 2810);
-					connected = true;
-				} catch (Exception e) {
-					Log.d(TAG, e.getMessage());
-				}
-			}
-
-			Log.d(TAG, "Connected");
-		});
-
-		socketConnection.start();
+		new Thread(this.socketConnection).start();
 
 		new Thread(this::datathingy).start();
 
@@ -251,7 +254,7 @@ public class LocationService extends Service {
 
 	public void datathingy() {
 		while(true) {
-			if(this.socket != null && !this.socket.isClosed()) {
+			if (this.socket != null && this.socket.isConnected()) {
 				try {
 					Location location = this.locationQueue.take();
 
@@ -261,23 +264,33 @@ public class LocationService extends Service {
 					this.insertDoubleTwo(buffer, 5, location.getLongitude());
 					this.insertDoubleOne(buffer, 8, location.getSpeed());
 
-					if (this.socket != null) {
-						try {
-							OutputStream out = this.socket.getOutputStream();
-							out.write(buffer);
-						} catch (IOException e) {
-							e.printStackTrace();
+
+					try {
+						OutputStream out = this.socket.getOutputStream();
+						out.write(buffer);
+
+						// Notify anyone listening for broadcasts about the new location.
+						Intent intent = new Intent(ACTION_BROADCAST);
+						intent.putExtra(EXTRA_LOCATION, location);
+						//LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
+
+						// Update notification content if running as a foreground service.
+						if (this.serviceIsRunningInForeground(this)) {
+							//mNotificationManager.notify(NOTIFICATION_ID, getNotification());
 						}
-					}
+					} catch (SocketException e) {
+						try {
+							this.locationQueue.offer(location);
+							this.socket.getOutputStream().close();
+							this.socket.close();
+							this.socket = null;
 
-					// Notify anyone listening for broadcasts about the new location.
-					Intent intent = new Intent(ACTION_BROADCAST);
-					intent.putExtra(EXTRA_LOCATION, location);
-					//LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
-
-					// Update notification content if running as a foreground service.
-					if (this.serviceIsRunningInForeground(this)) {
-						mNotificationManager.notify(NOTIFICATION_ID, getNotification());
+							new Thread(this.socketConnection).start();
+						} catch (IOException ex) {
+							ex.printStackTrace();
+						}
+					} catch (IOException e) {
+						e.printStackTrace();
 					}
 				} catch (InterruptedException e) {
 					e.printStackTrace();
