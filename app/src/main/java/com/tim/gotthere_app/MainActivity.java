@@ -13,7 +13,6 @@ import android.location.Location;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.preference.PreferenceManager;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -21,6 +20,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.preference.PreferenceFragmentCompat;
+import androidx.preference.PreferenceManager;
 
 /**
  * The main activity for the app. This is what controls the app's interface and deployment of the location service.
@@ -30,28 +30,10 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 	private static final String TAG = MainActivity.class.getSimpleName();
 	private static final int REQUEST_PERMISSIONS_REQUEST_CODE = 34;
 
-
-	private MyReceiver myReceiver;
-
 	//The instance of the service when it is bound to the app.
 	private LocationService mService = null;
 	//True when the service is bound to the app, false otherwise.
 	private boolean mBound = false;
-
-	private class MyReceiver extends BroadcastReceiver {
-		@Override
-		public void onReceive(Context context, Intent intent) {
-			Location location = intent.getParcelableExtra(LocationService.EXTRA_LOCATION);
-			if (location != null) {
-				Toast.makeText(MainActivity.this, getLocationText(location), Toast.LENGTH_SHORT).show();
-			}
-		}
-	}
-
-	public static String getLocationText(Location location) {
-		return location == null ? "Unknown location" :
-				"(" + location.getLatitude() + ", " + location.getLongitude() + ")";
-	}
 
 	/**
 	 * Manages when the service is connected and disconnected.
@@ -64,7 +46,6 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 		 */
 		@Override
 		public void onServiceConnected(ComponentName name, IBinder service) {
-			//
 			LocationService.LocalBinder binder = (LocationService.LocalBinder) service;
 			mService = binder.getService();
 			mService.requestLocationUpdates();
@@ -97,13 +78,8 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		this.myReceiver = new MyReceiver();
 		this.setContentView(R.layout.activity_main);
-		//this.getSupportFragmentManager().beginTransaction().replace(R.id.settings_container, new MySettingsFragment()).commit();
-
-		//if(Util.requestingLocationUpdates(this)) {
-			this.handlePermissions();
-		//}
+		this.handlePermissions();
 	}
 
 	/**
@@ -113,11 +89,9 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 	@Override
 	protected void onStart() {
 		super.onStart();
-		//PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(this);
+		PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(this);
 
 		this.bindService(new Intent(this, LocationService.class), this.mServiceConnection, Context.BIND_AUTO_CREATE);
-
-		//LocalBroadcastManager.getInstance(this).registerReceiver(this.myReceiver, new IntentFilter(LocationService.ACTION_BROADCAST)); //Look at this
 	}
 
 	/**
@@ -126,14 +100,12 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 	 */
 	@Override
 	protected void onStop() {
-		//LocalBroadcastManager.getInstance(this).unregisterReceiver(this.myReceiver);
-
 		if(mBound) {
 			this.unbindService(mServiceConnection);
 			mBound = false;
 		}
 
-		//PreferenceManager.getDefaultSharedPreferences(this).unregisterOnSharedPreferenceChangeListener(this);
+		PreferenceManager.getDefaultSharedPreferences(this).unregisterOnSharedPreferenceChangeListener(this);
 		super.onStop();
 	}
 
@@ -146,6 +118,9 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 		super.onDestroy();
 	}
 
+	/**
+	 * Used to handle the permissions of the app. More specifically ACCESS_FINE_LOCATION.
+	 */
 	public void handlePermissions() {
 		if(Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
 			//TODO Check for Android 6.0 https://stackoverflow.com/questions/33407250/checkselfpermission-method-is-not-working-in-targetsdkversion-22
@@ -153,8 +128,13 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 		}
 
 		if(this.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_DENIED) {
-			Log.d("Timmy", "Request ACCESS_FINE_LOCATION");
+			Log.d(TAG, "Request ACCESS_FINE_LOCATION");
 			requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION);
+		}
+
+		if(this.checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_DENIED) {
+			Log.d(TAG, "Request READ_PHONE_STATE");
+			requestPermissionLauncher.launch(Manifest.permission.READ_PHONE_STATE);
 		}
 	}
 

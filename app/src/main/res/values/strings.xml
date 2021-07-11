@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">GotThere</string>
+    <string name="interval">30</string>
 </resources>
