@@ -28,6 +28,7 @@
             // Fully qualified path to the AndroidManifest.xml file compiled into the APK.
             // Default: "${appSrcRoot}/AndroidManifest.xml"
             "manifestFile": "${workspaceRoot}/app/src/main/AndroidManifest.xml",
+            "preLaunchTask": "run gradle",
             // Custom arguments passed to the Android package manager to install the app.
             // Run 'adb shell pm' to show valid arguments. Default: ["-r"]
             "pmInstallArgs": [
