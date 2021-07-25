@@ -375,7 +375,7 @@ public class LocationService extends Service {
 		Intent intent = new Intent(this, LocationService.class);
 		String message;
 
-		message = "Notification String";
+		message = "GotThere is Running";
 
 		// Extra to help us figure out if we arrived in onStartCommand via the notification or not.
 		intent.putExtra(EXTRA_STARTED_FROM_NOTIFICATION, true);
