@@ -329,20 +329,23 @@ public class LocationService extends Service {
 				//bearing
 				//ip_address
 				//imei
-				String json = "{"+
-						"\"latitude\": "+location.getLatitude()+", "+
-						"\"longitude\": "+location.getLongitude()+", "+
-						"\"gps_time\": "+location.getTime()+", "+
-						"\"provider\": \"gps\", "+
-						"\"accuracy\": "+location.getAccuracy()+", "+
-						"\"speed\": "+location.getSpeed()+", "+
-						"\"altitude\": "+location.getAltitude()+", "+
-						"\"bearing\": "+location.getBearing()+", "+
-						"\"imei\": "+tm.getDeviceId()+
-						"}";
-				Log.d(TAG, json);
+				JSONObject json = new JSONObject();
+				try {
+					json.put("latitude", location.getLatitude());
+					json.put("longitude", location.getLongitude());
+					json.put("gps_time", location.getTime());
+					json.put("provider", location.getProvider());
+					json.put("accuracy", location.getAccuracy());
+					json.put("speed", location.getSpeed());
+					json.put("altitude", location.getAltitude());
+					json.put("bearing", location.getBearing());
+					json.put("imei", tm.getDeviceId());
+				} catch (JSONException e) {
+					e.printStackTrace();
+				}
+				String jsonString = json.toString();
 
-				RequestBody body = RequestBody.create(json, MediaType.parse("application/json"));
+				RequestBody body = RequestBody.create(jsonString, MediaType.parse("application/json"));
 				Request request = new Request.Builder().url("https://madeit.jrcichra.dev/phone_location").post(body).build();
 //				Request request = new Request.Builder().url("http://10.0.0.40:3000/phone_location").post(body).build();
 
