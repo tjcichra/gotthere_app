@@ -231,7 +231,7 @@ public class LocationService extends Service {
 		this.mLocationRequest = new LocationRequest();
 		this.mLocationRequest.setInterval(this.INTERVAL);
 		this.mLocationRequest.setFastestInterval(this.FASTEST_INTERVAL);
-		this.mLocationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+		this.mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
 	}
 
 	private void onNewLocation(Location location) {
