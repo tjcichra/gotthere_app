@@ -71,8 +71,8 @@ public class LocationService extends Service {
 
 	private final long INTERVAL = 30000;
 	private final long FASTEST_INTERVAL = 15000;
-//	private final long INTERVAL = 5000;
-//	private final long FASTEST_INTERVAL = 2500;
+	// private final long INTERVAL = 5000;
+	// private final long FASTEST_INTERVAL = 2500;
 
 	private static final int NOTIFICATION_ID = 12345678;
 
@@ -98,40 +98,43 @@ public class LocationService extends Service {
 	}
 
 	/**
-	 * Called when the service is first started. It only runs once.
-	 * Used to start the thread that handles location data.
+	 * Called when the service is first started. It only runs once. Used to start
+	 * the thread that handles location data.
 	 */
 	@Override
 	public void onCreate() {
 		super.onCreate();
 		Log.d(TAG, "onCreate()");
 
-		//Start thread for reading queued locations.
+		// Start thread for reading queued locations.
 		this.locationThread.start();
 
 		this.setupFusedLocationClient();
 	}
 
 	/**
-	 * Called after the service is bound to the main activity (but not when "promoted" to the foreground).
+	 * Called after the service is bound to the main activity (but not when
+	 * "promoted" to the foreground).
 	 */
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		Log.d(TAG, "onStartCommand()");
 		boolean startedFromNotification = intent.getBooleanExtra(EXTRA_STARTED_FROM_NOTIFICATION, false);
 
-		if(startedFromNotification) {
+		if (startedFromNotification) {
 			this.removeLocationUpdates();
 			this.stopSelf();
 		}
 
-		//Returns START_STICKY so that when memory is needed it doesn't kill the service.
+		// Returns START_STICKY so that when memory is needed it doesn't kill the
+		// service.
 		return START_STICKY;
 	}
 
 	/**
-	 * Called when the main activity binds to the service with bindService() (called before startCommand()).
-	 * Stops this service on the foreground and returns an interface used to interact with the service.
+	 * Called when the main activity binds to the service with bindService() (called
+	 * before startCommand()). Stops this service on the foreground and returns an
+	 * interface used to interact with the service.
 	 */
 	@Nullable
 	@Override
@@ -143,12 +146,15 @@ public class LocationService extends Service {
 	}
 
 	/**
-	 * Called when the main activity rebinds to the service after unbinding (called before startCommand())
+	 * Called when the main activity rebinds to the service after unbinding (called
+	 * before startCommand())
 	 */
 	@Override
 	public void onRebind(Intent intent) {
-		// Called when a client (MainActivity in case of this sample) returns to the foreground
-		// and binds once again with this service. The service should cease to be a foreground
+		// Called when a client (MainActivity in case of this sample) returns to the
+		// foreground
+		// and binds once again with this service. The service should cease to be a
+		// foreground
 		// service when that happens.
 		Log.d(TAG, "onRebind()");
 		this.stopForeground(true);
@@ -165,8 +171,10 @@ public class LocationService extends Service {
 	public boolean onUnbind(Intent intent) {
 		Log.d(TAG, "onUnbind()");
 
-		// Called when the last client (MainActivity in case of this sample) unbinds from this
-		// service. If this method is called due to a configuration change in MainActivity, we
+		// Called when the last client (MainActivity in case of this sample) unbinds
+		// from this
+		// service. If this method is called due to a configuration change in
+		// MainActivity, we
 		// do nothing. Otherwise, we make this service a foreground service.
 		if (!mChangingConfiguration && Util.requestingLocationUpdates(this)) {
 			Log.d(TAG, "Starting foreground service");
@@ -183,8 +191,8 @@ public class LocationService extends Service {
 	}
 
 	/**
-	 * Called when the foreground service is stopped and there are no bindings (ex. when the app itself is stopped).
-	 * This is for cleaning up sockets and threads.
+	 * Called when the foreground service is stopped and there are no bindings (ex.
+	 * when the app itself is stopped). This is for cleaning up sockets and threads.
 	 */
 	@Override
 	public void onDestroy() {
@@ -197,16 +205,17 @@ public class LocationService extends Service {
 			e.printStackTrace();
 		}
 
-		//mServiceHandler.removeCallbacksAndMessages(null);
+		// mServiceHandler.removeCallbacksAndMessages(null);
 	}
 
 	/**
-	 * Used for setting up the fused location client, which will start to insert locations into the location queue.
+	 * Used for setting up the fused location client, which will start to insert
+	 * locations into the location queue.
 	 */
 	public void setupFusedLocationClient() {
 		this.mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
-		//Set what happens when a new location is retrieved.
+		// Set what happens when a new location is retrieved.
 		this.mLocationCallback = new LocationCallback() {
 			@Override
 			public void onLocationResult(LocationResult locationResult) {
@@ -218,13 +227,14 @@ public class LocationService extends Service {
 		this.createLocationRequest();
 		this.getLastLocation();
 
-		//HandlerThread handlerThread = new HandlerThread(TAG);
-		//handlerThread.start();
-		//this.mServiceHandler = new Handler(handlerThread.getLooper());
+		// HandlerThread handlerThread = new HandlerThread(TAG);
+		// handlerThread.start();
+		// this.mServiceHandler = new Handler(handlerThread.getLooper());
 		this.mNotificationManager = (NotificationManager) this.getSystemService(NOTIFICATION_SERVICE);
 
-		if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-			NotificationChannel mChannel = new NotificationChannel(CHANNEL_ID, getString(R.string.app_name), NotificationManager.IMPORTANCE_DEFAULT);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			NotificationChannel mChannel = new NotificationChannel(CHANNEL_ID, getString(R.string.app_name),
+					NotificationManager.IMPORTANCE_DEFAULT);
 
 			mNotificationManager.createNotificationChannel(mChannel);
 		}
@@ -238,7 +248,8 @@ public class LocationService extends Service {
 	}
 
 	private void onNewLocation(Location location) {
-		Log.i(TAG, "Time: " + (location.getTime()/1000) + " Latitude: " + location.getLatitude() + " Longitude: " + location.getLongitude() + "Bearing: " + location.getBearing() + " Speed: " + location.getSpeed());
+		Log.i(TAG, "Time: " + (location.getTime() / 1000) + " Latitude: " + location.getLatitude() + " Longitude: "
+				+ location.getLongitude() + "Bearing: " + location.getBearing() + " Speed: " + location.getSpeed());
 
 		mLocation = location;
 
@@ -267,15 +278,16 @@ public class LocationService extends Service {
 	}
 
 	/**
-	 * Makes a request for location updates. Note that in this sample we merely log the
-	 * {@link SecurityException}.
+	 * Makes a request for location updates. Note that in this sample we merely log
+	 * the {@link SecurityException}.
 	 */
 	public void requestLocationUpdates() {
 		Log.i(TAG, "Requesting location updates");
 		setRequestingLocationUpdates(this, true);
 		this.startService(new Intent(getApplicationContext(), LocationService.class));
 		try {
-			this.mFusedLocationClient.requestLocationUpdates(this.mLocationRequest, this.mLocationCallback, Looper.myLooper());
+			this.mFusedLocationClient.requestLocationUpdates(this.mLocationRequest, this.mLocationCallback,
+					Looper.myLooper());
 		} catch (SecurityException unlikely) {
 			setRequestingLocationUpdates(this, false);
 			Log.e(TAG, "Lost location permission. Could not request updates. " + unlikely);
@@ -300,21 +312,20 @@ public class LocationService extends Service {
 
 	/**
 	 * Stores the location updates state in SharedPreferences.
+	 * 
 	 * @param requestingLocationUpdates The location updates state.
 	 */
 	static void setRequestingLocationUpdates(Context context, boolean requestingLocationUpdates) {
-		PreferenceManager.getDefaultSharedPreferences(context)
-				.edit()
-				.putBoolean(Util.KEY_REQUESTING_LOCATION_UPDATES, requestingLocationUpdates)
-				.apply();
+		PreferenceManager.getDefaultSharedPreferences(context).edit()
+				.putBoolean(Util.KEY_REQUESTING_LOCATION_UPDATES, requestingLocationUpdates).apply();
 	}
 
 	/**
-	 * Used to send out locations from the location queue.
-	 * Should be ran as a separate thread.
+	 * Used to send out locations from the location queue. Should be ran as a
+	 * separate thread.
 	 */
 	public void readLocationQueue() {
-		while(!closing) {
+		while (!closing) {
 			try {
 				Location location = this.locationQueue.take();
 
@@ -322,16 +333,16 @@ public class LocationService extends Service {
 
 				OkHttpClient client = new OkHttpClient();
 
-				//latitude
-				//longitude
-				//gps_time
-				//provider
-				//accuracy
-				//speed
-				//altitude
-				//bearing
-				//ip_address
-				//imei
+				// latitude
+				// longitude
+				// gps_time
+				// provider
+				// accuracy
+				// speed
+				// altitude
+				// bearing
+				// ip_address
+				// imei
 				JSONObject json = new JSONObject();
 				try {
 					json.put("latitude", location.getLatitude());
@@ -349,13 +360,15 @@ public class LocationService extends Service {
 				String jsonString = json.toString();
 
 				RequestBody body = RequestBody.create(jsonString, MediaType.parse("application/json"));
-				Request request = new Request.Builder().url("https://madeit.jrcichra.dev/phone_location").post(body).build();
-//				Request request = new Request.Builder().url("http://10.0.0.40:3000/phone_location").post(body).build();
+				Request request = new Request.Builder().url("https://madeit.jrcichra.dev/phone_location").post(body)
+						.build();
+				// Request request = new
+				// Request.Builder().url("http://10.0.0.40:3000/phone_location").post(body).build();
 
 				Call call = client.newCall(request);
 				Response response = call.execute();
 
-				if(!response.isSuccessful()) {
+				if (!response.isSuccessful()) {
 					Log.d(TAG, "HTTP response error");
 					this.locationQueue.put(location);
 				}
@@ -377,7 +390,8 @@ public class LocationService extends Service {
 
 		message = "GotThere is Running";
 
-		// Extra to help us figure out if we arrived in onStartCommand via the notification or not.
+		// Extra to help us figure out if we arrived in onStartCommand via the
+		// notification or not.
 		intent.putExtra(EXTRA_STARTED_FROM_NOTIFICATION, true);
 
 		// The PendingIntent that leads to a call to onStartCommand() in this service.
@@ -385,25 +399,21 @@ public class LocationService extends Service {
 				PendingIntent.FLAG_UPDATE_CURRENT);
 
 		// The PendingIntent to launch activity.
-		PendingIntent activityPendingIntent = PendingIntent.getActivity(this, 0,
-				new Intent(this, MainActivity.class), 0);
+		PendingIntent activityPendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class),
+				0);
 
-		NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-				.setContentTitle(message)
-				.setOngoing(true)
-				.setPriority(Notification.PRIORITY_HIGH)
-				.setSmallIcon(R.mipmap.ic_launcher)
-				.setTicker("Tim Ticker Text")
-				.setWhen(System.currentTimeMillis());
+		NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID).setContentTitle(message)
+				.setOngoing(true).setPriority(Notification.PRIORITY_HIGH).setSmallIcon(R.mipmap.ic_launcher)
+				.setTicker("Tim Ticker Text").setWhen(System.currentTimeMillis());
 
 		return builder.build();
 	}
 
 	public boolean serviceIsRunningInForeground(Context context) {
 		ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-		for(ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
-			if(this.getClass().getName().equals(service.service.getClassName())) {
-				if(service.foreground) {
+		for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+			if (this.getClass().getName().equals(service.service.getClassName())) {
+				if (service.foreground) {
 					return true;
 				}
 			}
