@@ -15,6 +15,7 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Binder;
 import android.os.Bundle;
+import android.os.CountDownTimer;
 import android.os.Handler;
 import android.os.IBinder;
 import android.telephony.TelephonyManager;
@@ -66,37 +67,17 @@ public class LocationService extends Service {
 	protected LocationManager locationManager;
 	private long MIN_TIME_BW_UPDATES = 30 * 1000; // n seconds
 	private float MIN_DISTANCE_CHANGE_FOR_UPDATES = 0.0f;
-	private double TIMER_MULTIPLIER = 1.5;
-	private Location lastLocation;
-	private Thread locationTimer = new Thread(this::locationTimerThread);
 
 	private BlockingQueue<Location> locationQueue = new ArrayBlockingQueue<>(512);
 
 	private boolean closing = false;
 
 	private Thread locationThread = new Thread(this::readLocationQueue);
+	private Location lastLocation;
 
 	public class LocalBinder extends Binder {
 		LocationService getService() {
 			return LocationService.this;
-		}
-	}
-
-	private void locationTimerThread() {
-		try {
-			while(true) {
-				//Sleep for TIMER_MULTIPLIER times as long as the interval before posting a point
-				Thread.sleep((long) (MIN_TIME_BW_UPDATES*TIMER_MULTIPLIER));
-				//If we made it through the sleep, insert the last location into the queue again
-				if (lastLocation != null) {
-					Log.d(TAG, "Location inserted by timer");
-					locationQueue.put(lastLocation);
-				} else {
-					Log.d(TAG, "Location would be inserted by timer but it is null");
-				}
-			}
-		} catch (InterruptedException e) {
-			Log.d(TAG, "Sleep was interrupted");
 		}
 	}
 
@@ -112,7 +93,7 @@ public class LocationService extends Service {
 		// Start thread for reading queued locations.
 		this.locationThread.start();
 		//Start the timer thread
-		this.locationTimer.start();
+//		this.locationTimer.start();
 
 	}
 
@@ -203,18 +184,12 @@ public class LocationService extends Service {
 		Log.i(TAG, "onDestroy()");
 		this.closing = true;
 		this.locationThread.interrupt();
-		this.locationTimer.interrupt();
 		try {
 			this.locationThread.join();
 		} catch (InterruptedException e) {
 			Log.d(TAG, Log.getStackTraceString(e));
 		}
-		try {
-			this.locationTimer.join();
-		} catch (InterruptedException e) {
-			Log.d(TAG, Log.getStackTraceString(e));
-		}
-
+//		stopService(new Intent(getApplicationContext(), LocationService.class));
 		// mServiceHandler.removeCallbacksAndMessages(null);
 	}
 
@@ -236,6 +211,27 @@ public class LocationService extends Service {
 			Log.d(TAG, Log.getStackTraceString(e));
 		}
 	}
+	public CountDownTimer timer = new CountDownTimer(45 * 1000,1 * 1000) {
+		@Override
+		public void onTick(long millisUntilFinished) {
+			//do nothing
+		}
+
+		@Override
+		public void onFinish() {
+			Log.d(TAG, "Location inserted by timer");
+			//shouldn't be null but you never know
+			if (lastLocation != null) {
+				try {
+					locationQueue.put(lastLocation);
+				} catch (InterruptedException e) {
+					Log.d(TAG, Log.getStackTraceString(e));
+				}
+			}
+			//start the timer again
+			timer.start();
+		}
+	};
 
 	public LocationListener locationProviderListener = new LocationListener() {
 
@@ -245,14 +241,9 @@ public class LocationService extends Service {
 			lastLocation = location;
 			try {
 				locationQueue.put(location);
-				//Bounce the timer thread
-				locationTimer.interrupt();
-				try {
-					locationTimer.join();
-				} catch (InterruptedException e) {
-					Log.d(TAG, Log.getStackTraceString(e));
-				}
-				locationTimer.run();
+				//cycle the timer
+				timer.cancel();
+				timer.start();
 			} catch (Exception e) {
 				Log.d(TAG, Log.getStackTraceString(e));
 			}
