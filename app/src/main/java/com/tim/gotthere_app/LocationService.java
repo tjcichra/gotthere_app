@@ -347,7 +347,7 @@ public class LocationService extends Service {
 				try {
 					json.put("latitude", location.getLatitude());
 					json.put("longitude", location.getLongitude());
-					json.put("gps_time", location.getTime());
+					json.put("gps_time", Math.round(location.getTime() / 1000));
 					json.put("provider", location.getProvider());
 					json.put("accuracy", location.getAccuracy());
 					json.put("speed", location.getSpeed());
