@@ -64,7 +64,6 @@ public class LocationService extends Service {
 	private static final int NOTIFICATION_ID = 1;
 
 	private boolean mChangingConfiguration = false;
-	private static boolean firsttime = true;
 
 	private Location mLocation;
 	private Handler mServiceHandler;
@@ -208,8 +207,7 @@ public class LocationService extends Service {
 			locationManager = (LocationManager) getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
 			boolean isGPSEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
 				if (isGPSEnabled) {
-					if (locationManager != null && firsttime) {
-						firsttime = false;
+					if (locationManager != null) {
 						locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, MIN_TIME_BW_UPDATES,
 								MIN_DISTANCE_CHANGE_FOR_UPDATES, locationProviderListener);
 					}
