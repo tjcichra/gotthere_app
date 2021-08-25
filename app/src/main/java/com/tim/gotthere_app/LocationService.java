@@ -355,7 +355,7 @@ public class LocationService extends Service {
 
 	private Notification getNotification() {
 		Intent intent = new Intent(this, LocationService.class);
-		String message = "GotThere is Running";
+		String message = "MadeIt (GT) is Running";
 
 		// Extra to help us figure out if we arrived in onStartCommand via the
 		// notification or not.
@@ -367,7 +367,7 @@ public class LocationService extends Service {
 
 		NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID).setContentTitle(message)
 				.setOngoing(true).setPriority(Notification.PRIORITY_HIGH).setSmallIcon(R.mipmap.ic_launcher)
-				.setTicker("Tim Ticker Text").setWhen(System.currentTimeMillis());
+				.setTicker("MadeIt (GT) Text").setWhen(System.currentTimeMillis());
 
 		return builder.build();
 	}
@@ -377,7 +377,7 @@ public class LocationService extends Service {
 		// the NotificationChannel class is new and not in the support library
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 			CharSequence name = getString(R.string.app_name);
-			String description = "GotThere is Running";
+			String description = "MadeIt (GT) is Running";
 			int importance = NotificationManager.IMPORTANCE_DEFAULT;
 			NotificationChannel channel = new NotificationChannel(CHANNEL_ID, name, importance);
 			channel.setDescription(description);
