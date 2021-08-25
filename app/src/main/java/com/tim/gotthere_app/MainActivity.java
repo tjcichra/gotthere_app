@@ -1,20 +1,16 @@
 package com.tim.gotthere_app;
 
 import android.Manifest;
-import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.location.Location;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.util.Log;
-import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -46,6 +42,7 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 		 */
 		@Override
 		public void onServiceConnected(ComponentName name, IBinder service) {
+			Log.d(TAG,"Main onServiceConnected()");
 			LocationService.LocalBinder binder = (LocationService.LocalBinder) service;
 			mService = binder.getService();
 			mService.requestLocationUpdates();
@@ -58,18 +55,13 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 		 */
 		@Override
 		public void onServiceDisconnected(ComponentName name) {
+			Log.d(TAG,"Main onServiceDisconnected()");
 			mService = null;
 			mBound = false;
 		}
 	};
 
-	private ActivityResultLauncher<String> requestPermissionLauncher = this.registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
-		if(isGranted) {
-			mService.requestLocationUpdates();
-		} else {
-
-		}
-	});
+	private ActivityResultLauncher<String> requestPermissionLauncher = this.registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {});
 
 	/**
 	 * Called right when the app is launched.
@@ -77,6 +69,7 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 	 */
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
+		Log.d(TAG,"Main onCreate()");
 		super.onCreate(savedInstanceState);
 		this.setContentView(R.layout.activity_main);
 		this.handlePermissions();
@@ -88,6 +81,7 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 	 */
 	@Override
 	protected void onStart() {
+		Log.d(TAG,"Main onStart()");
 		super.onStart();
 		PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(this);
 
@@ -100,6 +94,7 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 	 */
 	@Override
 	protected void onStop() {
+		Log.d(TAG,"Main onStop()");
 		if(mBound) {
 			this.unbindService(mServiceConnection);
 			mBound = false;
@@ -114,6 +109,7 @@ public class MainActivity extends AppCompatActivity implements SharedPreferences
 	 */
 	@Override
 	protected void onDestroy() {
+		Log.d(TAG,"Main onDestroy()");
 		this.stopService(new Intent(this, LocationService.class));
 		super.onDestroy();
 	}

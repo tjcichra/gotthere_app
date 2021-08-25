@@ -9,6 +9,6 @@ public class Util {
 	public static final String KEY_REQUESTING_LOCATION_UPDATES = "requesting_location_updates";
 
 	public static boolean requestingLocationUpdates(Context context) {
-		return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(KEY_REQUESTING_LOCATION_UPDATES, false);
+		return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(KEY_REQUESTING_LOCATION_UPDATES, true);
 	}
 }

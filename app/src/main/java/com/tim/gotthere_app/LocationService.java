@@ -3,6 +3,7 @@ package com.tim.gotthere_app;
 import android.Manifest;
 import android.app.ActivityManager;
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -14,15 +15,19 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Binder;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
 import android.os.IBinder;
+import android.provider.Settings;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
+import androidx.core.app.JobIntentService;
 import androidx.core.app.NotificationCompat;
 
 import org.json.JSONException;
@@ -56,9 +61,10 @@ public class LocationService extends Service {
 	// private final long INTERVAL = 5000;
 	// private final long FASTEST_INTERVAL = 2500;
 
-	private static final int NOTIFICATION_ID = 12345678;
+	private static final int NOTIFICATION_ID = 1;
 
 	private boolean mChangingConfiguration = false;
+	private static boolean firsttime = true;
 
 	private Location mLocation;
 	private Handler mServiceHandler;
@@ -89,12 +95,8 @@ public class LocationService extends Service {
 	public void onCreate() {
 		super.onCreate();
 		Log.d(TAG, "onCreate()");
-
-		// Start thread for reading queued locations.
 		this.locationThread.start();
-		//Start the timer thread
-//		this.locationTimer.start();
-
+		timer.start();
 	}
 
 	/**
@@ -172,6 +174,7 @@ public class LocationService extends Service {
 	@Override
 	public void onConfigurationChanged(Configuration newConfig) {
 		super.onConfigurationChanged(newConfig);
+		Log.d(TAG, "Configuration changed");
 		this.mChangingConfiguration = true;
 	}
 
@@ -189,18 +192,24 @@ public class LocationService extends Service {
 		} catch (InterruptedException e) {
 			Log.d(TAG, Log.getStackTraceString(e));
 		}
-//		stopService(new Intent(getApplicationContext(), LocationService.class));
-		// mServiceHandler.removeCallbacksAndMessages(null);
+		stopService(new Intent(getApplicationContext(), LocationService.class));
+//		 mServiceHandler.removeCallbacksAndMessages(null);
 	}
 
 	public void requestLocationUpdates() {
-		this.startService(new Intent(getApplicationContext(), LocationService.class));
+		Log.d(TAG, "requestLocationUpdates()");
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			this.startForegroundService(new Intent(getApplicationContext(), LocationService.class));
+		} else {
+			this.startService(new Intent(getApplicationContext(), LocationService.class));
+		}
+
 		try {
 			locationManager = (LocationManager) getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
 			boolean isGPSEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-			Log.d(TAG, "isGPSEnabled=" + isGPSEnabled);
 				if (isGPSEnabled) {
-					if (locationManager != null) {
+					if (locationManager != null && firsttime) {
+						firsttime = false;
 						locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, MIN_TIME_BW_UPDATES,
 								MIN_DISTANCE_CHANGE_FOR_UPDATES, locationProviderListener);
 					}
@@ -211,22 +220,24 @@ public class LocationService extends Service {
 			Log.d(TAG, Log.getStackTraceString(e));
 		}
 	}
+
 	public CountDownTimer timer = new CountDownTimer(45 * 1000,1 * 1000) {
 		@Override
 		public void onTick(long millisUntilFinished) {
-			//do nothing
+			// do nothing
 		}
 
 		@Override
 		public void onFinish() {
-			Log.d(TAG, "Location inserted by timer");
-			//shouldn't be null but you never know
 			if (lastLocation != null) {
 				try {
+					Log.d(TAG, "lastLocation inserted by timer");
 					locationQueue.put(lastLocation);
 				} catch (InterruptedException e) {
 					Log.d(TAG, Log.getStackTraceString(e));
 				}
+			} else {
+				Log.d(TAG, "lastLocation was null so no insert happened");
 			}
 			//start the timer again
 			timer.start();
@@ -303,7 +314,14 @@ public class LocationService extends Service {
 						Log.d(TAG, "IMEI is off. Setting it to a funny number");
 						json.put("imei", "1234567890");
 					} else {
-						json.put("imei", tm.getDeviceId());
+						String id = null;
+						try {
+							id = tm.getDeviceId();
+						}catch (SecurityException e) {
+							// permission for imei is blocked in newer versions of android. Use the ANDROID_ID instead if we have to use a unique id
+							id = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+						}
+						json.put("imei", id);
 					}
 
 				} catch (JSONException e) {
@@ -339,21 +357,15 @@ public class LocationService extends Service {
 
 	private Notification getNotification() {
 		Intent intent = new Intent(this, LocationService.class);
-		String message;
-
-		message = "GotThere is Running";
+		String message = "GotThere is Running";
 
 		// Extra to help us figure out if we arrived in onStartCommand via the
 		// notification or not.
 		intent.putExtra(EXTRA_STARTED_FROM_NOTIFICATION, true);
 
-		// The PendingIntent that leads to a call to onStartCommand() in this service.
-		PendingIntent servicePendingIntent = PendingIntent.getService(this, 0, intent,
-				PendingIntent.FLAG_UPDATE_CURRENT);
-
-		// The PendingIntent to launch activity.
-		PendingIntent activityPendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class),
-				0);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			createNotificationChannel();
+		}
 
 		NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID).setContentTitle(message)
 				.setOngoing(true).setPriority(Notification.PRIORITY_HIGH).setSmallIcon(R.mipmap.ic_launcher)
@@ -362,15 +374,20 @@ public class LocationService extends Service {
 		return builder.build();
 	}
 
-	public boolean serviceIsRunningInForeground(Context context) {
-		ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-		for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
-			if (this.getClass().getName().equals(service.service.getClassName())) {
-				if (service.foreground) {
-					return true;
-				}
-			}
+	private void createNotificationChannel() {
+		// Create the NotificationChannel, but only on API 26+ because
+		// the NotificationChannel class is new and not in the support library
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			CharSequence name = getString(R.string.app_name);
+			String description = "GotThere is Running";
+			int importance = NotificationManager.IMPORTANCE_DEFAULT;
+			NotificationChannel channel = new NotificationChannel(CHANNEL_ID, name, importance);
+			channel.setDescription(description);
+			// Register the channel with the system; you can't change the importance
+			// or other notification behaviors after this
+			NotificationManager notificationManager = getSystemService(NotificationManager.class);
+			notificationManager.createNotificationChannel(channel);
 		}
-		return false;
 	}
+
 }
