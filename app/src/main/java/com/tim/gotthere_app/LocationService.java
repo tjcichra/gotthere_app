@@ -1,5 +1,6 @@
 package com.tim.gotthere_app;
 
+import android.Manifest;
 import android.app.ActivityManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -8,46 +9,32 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Binder;
 import android.os.Build;
+import android.os.Bundle;
+import android.os.CountDownTimer;
 import android.os.Handler;
-import android.os.HandlerThread;
 import android.os.IBinder;
-import android.os.Looper;
-import android.preference.PreferenceManager;
+import android.provider.Settings;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.app.ActivityCompat;
+import androidx.core.app.JobIntentService;
 import androidx.core.app.NotificationCompat;
 
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationCallback;
-import com.google.android.gms.location.LocationRequest;
-import com.google.android.gms.location.LocationResult;
-import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.tasks.OnCompleteListener;
-import com.google.android.gms.tasks.Task;
-
-import org.json.JSONObject;
 import org.json.JSONException;
+import org.json.JSONObject;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
-import java.net.Socket;
-import java.net.SocketException;
-import java.net.URL;
-import java.net.UnknownHostException;
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.util.Date;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
@@ -74,22 +61,24 @@ public class LocationService extends Service {
 	// private final long INTERVAL = 5000;
 	// private final long FASTEST_INTERVAL = 2500;
 
-	private static final int NOTIFICATION_ID = 12345678;
+	private static final int NOTIFICATION_ID = 1;
 
 	private boolean mChangingConfiguration = false;
 
-	private FusedLocationProviderClient mFusedLocationClient;
-	private LocationCallback mLocationCallback;
-	private LocationRequest mLocationRequest;
 	private Location mLocation;
 	private Handler mServiceHandler;
 	private NotificationManager mNotificationManager;
+
+	protected LocationManager locationManager;
+	private long MIN_TIME_BW_UPDATES = 30 * 1000; // n seconds
+	private float MIN_DISTANCE_CHANGE_FOR_UPDATES = 0.0f;
 
 	private BlockingQueue<Location> locationQueue = new ArrayBlockingQueue<>(512);
 
 	private boolean closing = false;
 
 	private Thread locationThread = new Thread(this::readLocationQueue);
+	private Location lastLocation;
 
 	public class LocalBinder extends Binder {
 		LocationService getService() {
@@ -105,11 +94,8 @@ public class LocationService extends Service {
 	public void onCreate() {
 		super.onCreate();
 		Log.d(TAG, "onCreate()");
-
-		// Start thread for reading queued locations.
 		this.locationThread.start();
-
-		this.setupFusedLocationClient();
+		timer.start();
 	}
 
 	/**
@@ -122,7 +108,7 @@ public class LocationService extends Service {
 		boolean startedFromNotification = intent.getBooleanExtra(EXTRA_STARTED_FROM_NOTIFICATION, false);
 
 		if (startedFromNotification) {
-			this.removeLocationUpdates();
+//			this.removeLocationUpdates();
 			this.stopSelf();
 		}
 
@@ -187,6 +173,7 @@ public class LocationService extends Service {
 	@Override
 	public void onConfigurationChanged(Configuration newConfig) {
 		super.onConfigurationChanged(newConfig);
+		Log.d(TAG, "Configuration changed");
 		this.mChangingConfiguration = true;
 	}
 
@@ -202,123 +189,90 @@ public class LocationService extends Service {
 		try {
 			this.locationThread.join();
 		} catch (InterruptedException e) {
-			e.printStackTrace();
+			Log.d(TAG, Log.getStackTraceString(e));
 		}
-
-		// mServiceHandler.removeCallbacksAndMessages(null);
+		stopService(new Intent(getApplicationContext(), LocationService.class));
+//		 mServiceHandler.removeCallbacksAndMessages(null);
 	}
 
-	/**
-	 * Used for setting up the fused location client, which will start to insert
-	 * locations into the location queue.
-	 */
-	public void setupFusedLocationClient() {
-		this.mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-
-		// Set what happens when a new location is retrieved.
-		this.mLocationCallback = new LocationCallback() {
-			@Override
-			public void onLocationResult(LocationResult locationResult) {
-				super.onLocationResult(locationResult);
-				onNewLocation(locationResult.getLastLocation());
-			}
-		};
-
-		this.createLocationRequest();
-		this.getLastLocation();
-
-		// HandlerThread handlerThread = new HandlerThread(TAG);
-		// handlerThread.start();
-		// this.mServiceHandler = new Handler(handlerThread.getLooper());
-		this.mNotificationManager = (NotificationManager) this.getSystemService(NOTIFICATION_SERVICE);
-
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-			NotificationChannel mChannel = new NotificationChannel(CHANNEL_ID, getString(R.string.app_name),
-					NotificationManager.IMPORTANCE_DEFAULT);
-
-			mNotificationManager.createNotificationChannel(mChannel);
-		}
-	}
-
-	private void createLocationRequest() {
-		this.mLocationRequest = new LocationRequest();
-		this.mLocationRequest.setInterval(this.INTERVAL);
-		this.mLocationRequest.setFastestInterval(this.FASTEST_INTERVAL);
-		this.mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-	}
-
-	private void onNewLocation(Location location) {
-		Log.i(TAG, "Time: " + (location.getTime() / 1000) + " Latitude: " + location.getLatitude() + " Longitude: "
-				+ location.getLongitude() + "Bearing: " + location.getBearing() + " Speed: " + location.getSpeed());
-
-		mLocation = location;
-
-		try {
-			this.locationQueue.put(location);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
-	}
-
-	private void getLastLocation() {
-		try {
-			this.mFusedLocationClient.getLastLocation().addOnCompleteListener(new OnCompleteListener<Location>() {
-				@Override
-				public void onComplete(@NonNull Task<Location> task) {
-					if (task.isSuccessful() && task.getResult() != null) {
-						mLocation = task.getResult();
-					} else {
-						Log.w(TAG, "Failed to get location.");
-					}
-				}
-			});
-		} catch (SecurityException unlikely) {
-			Log.e(TAG, "Lost location permission." + unlikely);
-		}
-	}
-
-	/**
-	 * Makes a request for location updates. Note that in this sample we merely log
-	 * the {@link SecurityException}.
-	 */
 	public void requestLocationUpdates() {
-		Log.i(TAG, "Requesting location updates");
-		setRequestingLocationUpdates(this, true);
-		this.startService(new Intent(getApplicationContext(), LocationService.class));
+		Log.d(TAG, "requestLocationUpdates()");
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			this.startForegroundService(new Intent(getApplicationContext(), LocationService.class));
+		} else {
+			this.startService(new Intent(getApplicationContext(), LocationService.class));
+		}
+
 		try {
-			this.mFusedLocationClient.requestLocationUpdates(this.mLocationRequest, this.mLocationCallback,
-					Looper.myLooper());
-		} catch (SecurityException unlikely) {
-			setRequestingLocationUpdates(this, false);
-			Log.e(TAG, "Lost location permission. Could not request updates. " + unlikely);
+			locationManager = (LocationManager) getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
+			boolean isGPSEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+				if (isGPSEnabled) {
+					if (locationManager != null) {
+						locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, MIN_TIME_BW_UPDATES,
+								MIN_DISTANCE_CHANGE_FOR_UPDATES, locationProviderListener);
+					}
+			}
+		} catch (SecurityException e) {
+			Log.d(TAG, Log.getStackTraceString(e));
+		} catch (Exception e) {
+			Log.d(TAG, Log.getStackTraceString(e));
 		}
 	}
 
-	/**
-	 * Removes location updates. Note that in this sample we merely log the
-	 * {@link SecurityException}.
-	 */
-	public void removeLocationUpdates() {
-		Log.i(TAG, "Removing location updates");
-		try {
-			mFusedLocationClient.removeLocationUpdates(mLocationCallback);
-			setRequestingLocationUpdates(this, false);
-			this.stopSelf();
-		} catch (SecurityException unlikely) {
-			setRequestingLocationUpdates(this, true);
-			Log.e(TAG, "Lost location permission. Could not remove updates. " + unlikely);
+	public CountDownTimer timer = new CountDownTimer(45 * 1000,1 * 1000) {
+		@Override
+		public void onTick(long millisUntilFinished) {
+			// do nothing
 		}
-	}
 
-	/**
-	 * Stores the location updates state in SharedPreferences.
-	 * 
-	 * @param requestingLocationUpdates The location updates state.
-	 */
-	static void setRequestingLocationUpdates(Context context, boolean requestingLocationUpdates) {
-		PreferenceManager.getDefaultSharedPreferences(context).edit()
-				.putBoolean(Util.KEY_REQUESTING_LOCATION_UPDATES, requestingLocationUpdates).apply();
-	}
+		@Override
+		public void onFinish() {
+			if (lastLocation != null) {
+				try {
+					Log.d(TAG, "lastLocation inserted by timer");
+					locationQueue.put(lastLocation);
+				} catch (InterruptedException e) {
+					Log.d(TAG, Log.getStackTraceString(e));
+				}
+			} else {
+				Log.d(TAG, "lastLocation was null so no insert happened");
+			}
+			//start the timer again
+			timer.start();
+		}
+	};
+
+	public LocationListener locationProviderListener = new LocationListener() {
+
+		@Override
+		public void onLocationChanged(Location location) {
+			Log.d(TAG, "Location inserted by onLocationChanged");
+			lastLocation = location;
+			try {
+				locationQueue.put(location);
+				//cycle the timer
+				timer.cancel();
+				timer.start();
+			} catch (Exception e) {
+				Log.d(TAG, Log.getStackTraceString(e));
+			}
+		}
+
+		@Override
+		public void onStatusChanged(String s, int i, Bundle bundle) {
+
+		}
+
+		@Override
+		public void onProviderEnabled(String s) {
+
+		}
+
+		@Override
+		public void onProviderDisabled(String s) {
+
+		}
+	};
 
 	/**
 	 * Used to send out locations from the location queue. Should be ran as a
@@ -353,11 +307,26 @@ public class LocationService extends Service {
 					json.put("speed", location.getSpeed());
 					json.put("altitude", location.getAltitude());
 					json.put("bearing", location.getBearing());
-					json.put("imei", tm.getDeviceId());
+
+					if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+						Log.d(TAG, "IMEI is off. Setting it to a funny number");
+						json.put("imei", "1234567890");
+					} else {
+						String id = null;
+						try {
+							id = tm.getDeviceId();
+						}catch (SecurityException e) {
+							// permission for imei is blocked in newer versions of android. Use the ANDROID_ID instead if we have to use a unique id
+							id = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+						}
+						json.put("imei", id);
+					}
+
 				} catch (JSONException e) {
 					e.printStackTrace();
 				}
 				String jsonString = json.toString();
+				Log.d(TAG, jsonString);
 
 				RequestBody body = RequestBody.create(jsonString, MediaType.parse("application/json"));
 				Request request = new Request.Builder().url("https://madeit.jrcichra.dev/phone_location").post(body)
@@ -386,38 +355,37 @@ public class LocationService extends Service {
 
 	private Notification getNotification() {
 		Intent intent = new Intent(this, LocationService.class);
-		String message;
-
-		message = "GotThere is Running";
+		String message = "MadeIt (GT) is Running";
 
 		// Extra to help us figure out if we arrived in onStartCommand via the
 		// notification or not.
 		intent.putExtra(EXTRA_STARTED_FROM_NOTIFICATION, true);
 
-		// The PendingIntent that leads to a call to onStartCommand() in this service.
-		PendingIntent servicePendingIntent = PendingIntent.getService(this, 0, intent,
-				PendingIntent.FLAG_UPDATE_CURRENT);
-
-		// The PendingIntent to launch activity.
-		PendingIntent activityPendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class),
-				0);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			createNotificationChannel();
+		}
 
 		NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID).setContentTitle(message)
 				.setOngoing(true).setPriority(Notification.PRIORITY_HIGH).setSmallIcon(R.mipmap.ic_launcher)
-				.setTicker("Tim Ticker Text").setWhen(System.currentTimeMillis());
+				.setTicker("MadeIt (GT) Text").setWhen(System.currentTimeMillis());
 
 		return builder.build();
 	}
 
-	public boolean serviceIsRunningInForeground(Context context) {
-		ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-		for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
-			if (this.getClass().getName().equals(service.service.getClassName())) {
-				if (service.foreground) {
-					return true;
-				}
-			}
+	private void createNotificationChannel() {
+		// Create the NotificationChannel, but only on API 26+ because
+		// the NotificationChannel class is new and not in the support library
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			CharSequence name = getString(R.string.app_name);
+			String description = "MadeIt (GT) is Running";
+			int importance = NotificationManager.IMPORTANCE_DEFAULT;
+			NotificationChannel channel = new NotificationChannel(CHANNEL_ID, name, importance);
+			channel.setDescription(description);
+			// Register the channel with the system; you can't change the importance
+			// or other notification behaviors after this
+			NotificationManager notificationManager = getSystemService(NotificationManager.class);
+			notificationManager.createNotificationChannel(channel);
 		}
-		return false;
 	}
+
 }
