@@ -287,6 +287,11 @@ public class LocationService extends Service {
 
 				OkHttpClient client = new OkHttpClient();
 
+				// calculate the proper gps time
+				long gps_time_since_boot_in_milliseconds = location.getElapsedRealtimeNanos() / 1000000;
+				long boot_time_in_milliseconds = (java.lang.System.currentTimeMillis() - android.os.SystemClock.elapsedRealtime());
+				long gps_time = (boot_time_in_milliseconds + gps_time_since_boot_in_milliseconds) / 1000;
+
 				// latitude
 				// longitude
 				// gps_time
@@ -301,7 +306,7 @@ public class LocationService extends Service {
 				try {
 					json.put("latitude", location.getLatitude());
 					json.put("longitude", location.getLongitude());
-					json.put("gps_time", Math.round(location.getTime() / 1000));
+					json.put("gps_time", gps_time);
 					json.put("provider", location.getProvider());
 					json.put("accuracy", location.getAccuracy());
 					json.put("speed", location.getSpeed());
